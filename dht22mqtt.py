@@ -167,8 +167,8 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 def updateEssentialMqtt(temperature, humidity, detected):
     if 'essential' in dht22mqtt_mqtt_chatter:
-        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
-            humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
+        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(
+            temperature) + ';' + str(humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
         if detected == 'accurate' or detected == 'bypass':
             log2stdout(payload, 'info')
             client.publish(mqtt_topic, payload, qos=1, retain=True)
