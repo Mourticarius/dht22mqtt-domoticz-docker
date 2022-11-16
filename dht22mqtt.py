@@ -10,20 +10,33 @@ import logging
 from gpiomapping import gpiomapping
 import paho.mqtt.client as mqtt
 
+# create logger
+logger = logging.getLogger("dht22mqtt")
+logger.setLevel(logging.INFO)
+
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# create formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# add formatter to ch
+ch.setFormatter(formatter)
+
+# add ch to logger
+logger.addHandler(ch)
+
 # Begin
 dht22mqtt_start_ts = datetime.now()
-
 ###############
 # MQTT Params
 ###############
-mqtt_topic = os.getenv('topic', 'zigbee2mqtt/')
-mqtt_device_id = os.getenv('device_id', 'dht22')
+mqtt_topic = os.getenv('topic', 'domoticz/in')
+mqtt_idx = os.getenv('idx', None)
 mqtt_brokeraddr = os.getenv('broker', '192.168.1.10')
 mqtt_username = os.getenv('username', None)
 mqtt_password = os.getenv('password', None)
-if not mqtt_topic.endswith('/'):
-    mqtt_topic = mqtt_topic + "/"
-mqtt_topic = mqtt_topic + mqtt_device_id + '/'
 
 ###############
 # GPIO params
@@ -38,7 +51,7 @@ dht22mqtt_temp_unit = os.getenv('unit', 'C')
 ###############
 # MQTT & Logging params
 ###############
-dht22mqtt_mqtt_chatter = str(os.getenv('mqtt_chatter', 'essential|ha|full')).lower()
+dht22mqtt_mqtt_chatter = str(os.getenv('mqtt_chatter', 'essential')).lower()
 dht22mqtt_logging_mode = str(os.getenv('logging', 'None')).lower()
 dht22mqtt_sensor_tally = dict()
 
@@ -61,29 +74,29 @@ dht22_error_count_stack_flush = 3
 ###############
 def log2file(filename, params):
     if 'log2file' in dht22mqtt_logging_mode:
-        ts_filename = dht22mqtt_start_ts.strftime('%Y-%m-%dT%H-%M-%SZ')+'_'+filename+".csv"
-        with open("/log/"+ts_filename, "a+") as file:
+        ts_filename = dht22mqtt_start_ts.strftime('%Y-%m-%dT%H-%M-%SZ') + '_' + filename + ".csv"
+        with open("/log/" + ts_filename, "a+") as file:
             w = csv.DictWriter(file, delimiter=',', lineterminator='\n', fieldnames=params.keys())
             if file.tell() == 0:
                 w.writeheader()
             w.writerow(params)
 
 
-def log2stdout(timestamp, msg, type):
+def log2stdout(msg, type):
     if 'log2stdout' in dht22mqtt_logging_mode:
         if type == 'info':
-            logging.info(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%SZ')+' '+str(msg))
+            logger.info(str(msg))
         if type == 'warning':
-            logging.warning(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%SZ')+' '+str(msg))
+            logger.warning(str(msg))
         if type == 'error':
-            logging.error(datetime.fromtimestamp(timestamp).strftime('%Y-%m-%dT%H:%M:%SZ')+' '+str(msg))
+            logger.error(str(msg))
 
 
 ###############
 # Polling functions
 ###############
 def getTemperatureJitter(temperature):
-    return getTemperature(temperature-0.3), getTemperature(temperature+0.3)
+    return getTemperature(temperature - 0.3), getTemperature(temperature + 0.3)
 
 
 def getTemperature(temperature):
@@ -94,6 +107,19 @@ def getTemperature(temperature):
 
 def getHumidity(humidity):
     return humidity
+
+
+def getHumidityStatus(humidity):
+    if isinstance(humidity, int):
+        if humidity < 30:
+            return 2
+        elif humidity >= 30 and humidity < 45:
+            return 0
+        elif humidity >= 45 and humidity < 70:
+            return 1
+        elif humidity >= 70:
+            return 3
+    return 0
 
 
 ###############
@@ -121,7 +147,7 @@ def processSensorValue(stack, error, value, value_type):
     mean = statistics.mean(stack)
 
     # compute if outlier or not
-    if mean-std*dht22_std_deviation < value < mean+std*dht22_std_deviation:
+    if mean - std * dht22_std_deviation < value < mean + std * dht22_std_deviation:
         outlier = False
         if value not in stack:
             stack.append(value)
@@ -141,34 +167,13 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 def updateEssentialMqtt(temperature, humidity, detected):
     if 'essential' in dht22mqtt_mqtt_chatter:
-        if detected == 'accurate':
-            payload = '{ "temperature": '+str(temperature)+', "humidity": '+str(humidity)+' }'
-            client.publish(mqtt_topic + 'value', payload, qos=1, retain=True)
-            client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
-        elif detected == 'bypass':
-            payload = '{ "temperature": '+str(temperature)+', "humidity": '+str(humidity)+' }'
-            client.publish(mqtt_topic + 'value', payload, qos=1, retain=True)
-            client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
-        else:
-            client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
+        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
+            humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
+        if detected == 'accurate' or detected == 'bypass':
+            log2stdout(payload, 'info')
+            client.publish(mqtt_topic, payload, qos=1, retain=True)
+        client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
-
-
-def registerWithHomeAssitant():
-    if 'ha' in dht22mqtt_mqtt_chatter:
-        ha_temperature_config = '{"device_class": "temperature",' + \
-                                ' "name": "'+mqtt_device_id+'_temperature",' + \
-                                ' "state_topic": "'+mqtt_topic+'value",' + \
-                                ' "unit_of_measurement": "°'+dht22mqtt_temp_unit+'",' + \
-                                ' "value_template": "{{ value_json.temperature}}" }'
-        ha_humidity_config = '{"device_class": "humidity",' + \
-                             ' "name": "'+mqtt_device_id+'_humidity",' + \
-                             ' "state_topic": "'+mqtt_topic+'value",' + \
-                             ' "unit_of_measurement": "%",' + \
-                             ' "value_template": "{{ value_json.humidity}}" }'
-        client.publish('homeassistant/sensor/'+mqtt_device_id+'Temperature/config', ha_temperature_config, qos=1, retain=True)
-        client.publish('homeassistant/sensor/'+mqtt_device_id+'Humidity/config', ha_humidity_config, qos=1, retain=True)
-        log2stdout(datetime.now().timestamp(), 'Registering sensor with home assistant success...', 'info')
 
 
 def updateFullSysInternalsMqtt(key):
@@ -189,22 +194,27 @@ def updateFullSysInternalsMqtt(key):
 ###############
 # Setup dht22 sensor
 ###############
-log2stdout(dht22mqtt_start_ts.timestamp(), 'Starting dht22mqtt...', 'info')
+log2stdout('Starting dht22mqtt...', 'info')
+log2stdout('Parameters: ', 'info')
+log2stdout('  mqtt_idx = ' + mqtt_idx, 'info')
+log2stdout('  mqtt_brokeraddr = ' + mqtt_brokeraddr, 'info')
+log2stdout('  mqtt_topic = ' + mqtt_topic, 'info')
+
 if dht22mqtt_device_type == 'dht22' or dht22mqtt_device_type == 'am2302':
     dhtDevice = adafruit_dht.DHT22(gpiomapping[dht22mqtt_pin], use_pulseio=False)
 elif dht22mqtt_device_type == 'dht11':
     dhtDevice = adafruit_dht.DHT11(gpiomapping[dht22mqtt_pin], use_pulseio=False)
 else:
-    log2stdout(datetime.now().timestamp(), 'Unsupported device '+dht22mqtt_device_type+'...', 'error')
-    log2stdout(datetime.now().timestamp(), 'Devices supported by this container are DHT11/DHT22/AM2302', 'error')
+    log2stdout('Unsupported device ' + dht22mqtt_device_type + '...', 'error')
+    log2stdout('Devices supported by this container are DHT11/DHT22/AM2302', 'error')
 
-log2stdout(datetime.now().timestamp(), 'Setup dht22 sensor success...', 'info')
+log2stdout('Setup dht22 sensor success...', 'info')
 
 ###############
 # Setup mqtt client
 ###############
 if 'essential' in dht22mqtt_mqtt_chatter:
-    client = mqtt.Client(mqtt_device_id, clean_session=True, userdata=None)
+    client = mqtt.Client(mqtt_idx, clean_session=True, userdata=None)
 
     if mqtt_username:
         client.username_pw_set(username=mqtt_username, password=mqtt_password)
@@ -213,35 +223,20 @@ if 'essential' in dht22mqtt_mqtt_chatter:
     client.will_set(mqtt_topic + "state", "OFFLINE", qos=1, retain=True)
 
     # keep alive for 60 times the refresh rate
-    client.connect(mqtt_brokeraddr, keepalive=dht22mqtt_refresh*60)
+    client.connect(mqtt_brokeraddr, keepalive=dht22mqtt_refresh * 60)
 
     client.loop_start()
 
     client.publish(mqtt_topic + "type", "sensor", qos=1, retain=True)
     client.publish(mqtt_topic + "device", "dht22", qos=1, retain=True)
 
-    if 'full' in dht22mqtt_mqtt_chatter:
-        client.publish(mqtt_topic + "env/pin", dht22mqtt_pin, qos=1, retain=True)
-        client.publish(mqtt_topic + "env/brokeraddr", mqtt_brokeraddr, qos=1, retain=True)
-        client.publish(mqtt_topic + "env/username", mqtt_username, qos=1, retain=True)
-        client.publish(mqtt_topic + "env/refresh", dht22mqtt_refresh, qos=1, retain=True)
-        client.publish(mqtt_topic + "env/logging", dht22mqtt_logging_mode, qos=1, retain=True)
-        client.publish(mqtt_topic + "env/mqtt_chatter", dht22mqtt_mqtt_chatter, qos=1, retain=True)
-
-        client.publish(mqtt_topic + "sys/dht22_stack_size", dht22_stack_size, qos=1, retain=True)
-        client.publish(mqtt_topic + "sys/dht22_std_deviation", dht22_std_deviation, qos=1, retain=True)
-        client.publish(mqtt_topic + "sys/dht22_error_count_stack_flush", dht22_error_count_stack_flush, qos=1, retain=True)
-
     client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
 
-    log2stdout(datetime.now().timestamp(), 'Setup mqtt client success...', 'info')
+    log2stdout('Setup mqtt client success...', 'info')
 
     client.publish(mqtt_topic + "state", "ONLINE", qos=1, retain=True)
 
-    registerWithHomeAssitant()
-
-log2stdout(datetime.now().timestamp(), 'Begin capture...', 'info')
-
+log2stdout('Begin capture...', 'info')
 
 while True:
     try:
@@ -249,22 +244,15 @@ while True:
         temperature = getTemperature(dhtDevice.temperature)
         humidity = getHumidity(dhtDevice.humidity)
 
-        temp_data = processSensorValue(dht22_temp_stack,
-                                       dht22_temp_stack_errors,
-                                       temperature,
-                                       'temperature')
+        temp_data = processSensorValue(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
         dht22_temp_stack = temp_data[0]
         dht22_temp_stack_errors = temp_data[1]
         temperature_outlier = temp_data[2]
 
-        hum_data = processSensorValue(dht22_hum_stack,
-                                      dht22_hum_stack_errors,
-                                      humidity,
-                                      'humidity')
+        hum_data = processSensorValue(dht22_hum_stack, dht22_hum_stack_errors, humidity, 'humidity')
         dht22_hum_stack = hum_data[0]
         dht22_hum_stack_errors = hum_data[1]
         humidity_outlier = hum_data[2]
-
         # Since the intuition here is that errors in humidity and temperature readings
         # are heavily correlated, we can skip mqtt if we detect either.
         detected = ''
@@ -280,12 +268,14 @@ while True:
             updateEssentialMqtt(temperature, humidity, 'bypass')
         updateFullSysInternalsMqtt(detected)
 
-        data = {'timestamp': dht22_ts,
-                'temperature': temperature,
-                'humidity': humidity,
-                'temperature_outlier': temperature_outlier,
-                'humidity_outlier': humidity_outlier}
-        log2stdout(dht22_ts, data, 'info')
+        data = {
+            'timestamp': dht22_ts,
+            'temperature': temperature,
+            'humidity': humidity,
+            'temperature_outlier': temperature_outlier,
+            'humidity_outlier': humidity_outlier
+        }
+        log2stdout(data, 'info')
         log2file('recording', data)
 
         time.sleep(dht22mqtt_refresh)
@@ -297,7 +287,7 @@ while True:
         updateFullSysInternalsMqtt(error.args[0])
 
         data = {'timestamp': dht22_ts, 'error_type': error.args[0]}
-        log2stdout(dht22_ts, data, 'warning')
+        log2stdout(data, 'warning')
         log2file('error', data)
 
         time.sleep(dht22mqtt_refresh)
