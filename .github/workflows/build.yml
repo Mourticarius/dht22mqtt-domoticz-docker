@@ -6,6 +6,8 @@ on:
       - datasets/**
     tags:
       - "**"
+    branches:
+      - "master"
 
 jobs:
   buildx:
