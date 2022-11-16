@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 from datetime import datetime
 import time
 import os
@@ -167,27 +168,12 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 def updateEssentialMqtt(temperature, humidity, detected):
     if 'essential' in dht22mqtt_mqtt_chatter:
-        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(
-            temperature) + ';' + str(humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
+        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
+            humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
         if detected == 'accurate' or detected == 'bypass':
             log2stdout(payload, 'info')
             client.publish(mqtt_topic, payload, qos=1, retain=True)
         client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
-        client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
-
-
-def updateFullSysInternalsMqtt(key):
-    if 'full' in dht22mqtt_mqtt_chatter:
-        client.publish(mqtt_topic + "sys/temperature_stack_size", len(dht22_temp_stack), qos=1, retain=True)
-        client.publish(mqtt_topic + "sys/temperature_error_count", dht22_temp_stack_errors, qos=1, retain=True)
-        client.publish(mqtt_topic + "sys/humidity_stack_size", len(dht22_hum_stack), qos=1, retain=True)
-        client.publish(mqtt_topic + "sys/humidity_error_count", dht22_hum_stack_errors, qos=1, retain=True)
-        client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
-        if key in dht22mqtt_sensor_tally:
-            dht22mqtt_sensor_tally[key] += 1
-        else:
-            dht22mqtt_sensor_tally[key] = 1
-        client.publish(mqtt_topic + "sys/tally/" + key, dht22mqtt_sensor_tally[key], qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
 
 
@@ -266,7 +252,6 @@ while True:
             updateEssentialMqtt(temperature, humidity, detected)
         else:
             updateEssentialMqtt(temperature, humidity, 'bypass')
-        updateFullSysInternalsMqtt(detected)
 
         data = {
             'timestamp': dht22_ts,
@@ -284,7 +269,6 @@ while True:
         # DHT22 throws errors often. Keep reading.
         detected = 'error'
         updateEssentialMqtt(None, None, detected)
-        updateFullSysInternalsMqtt(error.args[0])
 
         data = {'timestamp': dht22_ts, 'error_type': error.args[0]}
         log2stdout(data, 'warning')
