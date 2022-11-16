@@ -2,9 +2,9 @@ name: ci
 on:
   push:
     paths-ignore:
-      - 'README.md'
+      - "README.md"
     branches:
-      - '**'
+      - "**"
 
 jobs:
   test:
@@ -22,7 +22,7 @@ jobs:
       - name: Lint with flake8
         run: |
           pip install flake8
-          flake8 . --max-line-length=130
+          flake8 . --max-line-length=150
   buildx:
     runs-on: ubuntu-20.04
     needs: test
