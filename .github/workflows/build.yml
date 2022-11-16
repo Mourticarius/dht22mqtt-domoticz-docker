@@ -6,8 +6,6 @@ on:
       - datasets/**
     tags:
       - "**"
-    branches:
-      - "master"
 
 jobs:
   test:

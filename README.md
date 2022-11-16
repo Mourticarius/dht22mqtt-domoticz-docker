@@ -1,8 +1,9 @@
 # dht22 temperature/humidity sensor in a docker container
 
-This docker container is based on https://github.com/hvalev/dht22mqtt-homeassistant-docker, for more information please check it out.
+This docker container is based on [dht22mqtt-homeassistant-docker](https://github.com/hvalev/dht22mqtt-homeassistant-docker) ([Docker Hub](https://hub.docker.com/r/hvalev/dht22mqtt-homeassistant)), for more information please check it out.
 
-The main difference is that it sends only essential data directly to a configured MQTT domoticz topic (https://www.domoticz.com/wiki/MQTT)
+The main difference is that it sends only essential data directly to a configured MQTT domoticz topic (see: https://www.domoticz.com/wiki/MQTT)
+
 Data sent: temperature + humidity + humidity status
 
 [![build](https://github.com/Mourticarius/dht22mqtt-domoticz-docker/actions/workflows/build.yml/badge.svg)](https://github.com/Mourticarius/dht22mqtt-domoticz-docker/actions/workflows/build.yml)
@@ -52,5 +53,5 @@ _If you want to run this container to simply record values to files with no MQTT
 
 ## Acknowledgements
 
-There are no breaking changes from the original version, only adaptations: </br>
+All the work has been done in the following resource: </br>
 https://github.com/hvalev/dht22mqtt-homeassistant-docker </br>
