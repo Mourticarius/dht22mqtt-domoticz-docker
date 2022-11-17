@@ -39,6 +39,10 @@ mqtt_brokeraddr = os.getenv('broker', '192.168.1.10')
 mqtt_username = os.getenv('username', None)
 mqtt_password = os.getenv('password', None)
 
+mqtt_lastUpdateTime = 0
+mqtt_maxUpdateTime = int(os.getenv('maxUpdateTime', '900'))  # 15 minutes
+mqtt_updateOnEveryChange = os.getenv('updateOnEveryChange', 'False').lower() in ["true"]
+
 ###############
 # GPIO params
 ###############
@@ -171,7 +175,7 @@ def updateEssentialMqtt(temperature, humidity, detected):
         payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
             humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
         if detected == 'accurate' or detected == 'bypass':
-            log2stdout(payload, 'info')
+            log2stdout('Publishing payload: ' + payload, 'info')
             client.publish(mqtt_topic, payload, qos=1, retain=True)
         client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
@@ -224,6 +228,9 @@ if 'essential' in dht22mqtt_mqtt_chatter:
 
 log2stdout('Begin capture...', 'info')
 
+lastTemperature = 0
+lastHumidity = 0
+
 while True:
     try:
         dht22_ts = datetime.now().timestamp()
@@ -247,11 +254,28 @@ while True:
         else:
             detected = 'outlier'
 
-        # Check if filtering enabled
-        if 'enabled' in dht22mqtt_filtering_enabled:
-            updateEssentialMqtt(temperature, humidity, detected)
+        # Send to MQTT only if there are differences or if it's been more than `mqtt_maxUpdateTime` min since last update
+        changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
+        if changeInValues or mqtt_lastUpdateTime >= mqtt_maxUpdateTime:
+            mqtt_lastUpdateTime = 0
+            # Check if filtering enabled
+            if 'enabled' in dht22mqtt_filtering_enabled:
+                updateEssentialMqtt(temperature, humidity, detected)
+            else:
+                updateEssentialMqtt(temperature, humidity, 'bypass')
         else:
-            updateEssentialMqtt(temperature, humidity, 'bypass')
+            log2stdout('Ignoring MQTT update:', 'info')
+            mqtt_lastUpdateTimeInMin = mqtt_lastUpdateTime / 60
+            mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTimeInMin) + " minutes"
+            if mqtt_lastUpdateTimeInMin < 1:
+                mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTime) + " seconds"
+
+            log2stdout('    -> Considering change in temperature and humidity: ' + str(changeInValues), 'info')
+            log2stdout('    -> Last update was ' + mqtt_lastUpdateTimeStr + ' ago)', 'info')
+
+        lastTemperature = temperature
+        lastHumidity = humidity
+        mqtt_lastUpdateTime += dht22mqtt_refresh
 
         data = {
             'timestamp': dht22_ts,

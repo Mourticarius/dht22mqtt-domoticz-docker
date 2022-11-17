@@ -1,6 +1,6 @@
 FROM python:3.9.5-alpine3.12
 
-COPY requirements.txt dht22mqtt.py gpiomapping.py ./
+COPY requirements.txt dht22mqtt.py ./
 
 RUN apk add gcc musl-dev && \
     pip3 install -r requirements.txt --no-cache-dir && \
