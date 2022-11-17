@@ -11,13 +11,22 @@ import logging
 from gpiomapping import gpiomapping
 import paho.mqtt.client as mqtt
 
+logLevelStr = os.getenv('logLevel', "info")
+logLevel = logging.INFO
+if logLevelStr == "debug":
+    logLevel = logging.DEBUG
+if logLevelStr == "warn":
+    logLevel = logging.WARN
+if logLevelStr == "error":
+    logLevel = logging.ERROR
+
 # create logger
 logger = logging.getLogger("dht22mqtt")
-logger.setLevel(logging.INFO)
+logger.setLevel(logLevel)
 
 # create console handler and set level to debug
 ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
+ch.setLevel(logLevel)
 
 # create formatter
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -38,6 +47,10 @@ mqtt_idx = os.getenv('idx', None)
 mqtt_brokeraddr = os.getenv('broker', '192.168.1.10')
 mqtt_username = os.getenv('username', None)
 mqtt_password = os.getenv('password', None)
+
+mqtt_lastUpdateTime = 0
+mqtt_updateDelay = int(os.getenv('updateDelay', '900'))  # 15 minutes
+mqtt_updateOnEveryChange = os.getenv('updateOnEveryChange', 'False').lower() in ["true"]
 
 ###############
 # GPIO params
@@ -69,6 +82,13 @@ dht22_stack_size = 10
 dht22_std_deviation = 3
 dht22_error_count_stack_flush = 3
 
+###############
+# Misc
+###############
+
+lastTemperature = 0
+lastHumidity = 0
+
 
 ###############
 # Logging functions
@@ -85,6 +105,8 @@ def log2file(filename, params):
 
 def log2stdout(msg, type):
     if 'log2stdout' in dht22mqtt_logging_mode:
+        if type == 'debug':
+            logger.debug(str(msg))
         if type == 'info':
             logger.info(str(msg))
         if type == 'warning':
@@ -167,12 +189,37 @@ def processSensorValue(stack, error, value, value_type):
 # MQTT update functions
 ###############
 def updateEssentialMqtt(temperature, humidity, detected):
+    global lastTemperature
+    global lastHumidity
+    global mqtt_lastUpdateTime
+    global mqtt_updateDelay
+    global mqtt_updateOnEveryChange
+
     if 'essential' in dht22mqtt_mqtt_chatter:
-        payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
-            humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
         if detected == 'accurate' or detected == 'bypass':
-            log2stdout(payload, 'info')
-            client.publish(mqtt_topic, payload, qos=1, retain=True)
+            # Send to MQTT only if there are differences or if it's been more than `mqtt_updateDelay` min since last update
+            changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
+            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or mqtt_lastUpdateTime >= mqtt_updateDelay:
+                payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
+                    humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
+
+                log2stdout('>>> Publishing payload: ', 'info')
+                log2stdout('    ' + payload, 'debug')
+
+                mqtt_lastUpdateTime = 0
+                lastTemperature = temperature
+                lastHumidity = humidity
+                client.publish(mqtt_topic, payload, qos=1, retain=True)
+            else:
+                log2stdout('Ignoring MQTT update:', 'debug')
+                mqtt_lastUpdateTimeInMin = round(mqtt_lastUpdateTime / 60, 1)
+                mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTimeInMin) + " minutes"
+                if mqtt_lastUpdateTimeInMin < 1:
+                    mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTime) + " seconds"
+
+                log2stdout('    -> Change in temperature and humidity: ' + str(changeInValues), 'debug')
+                log2stdout('    -> Last update was ' + mqtt_lastUpdateTimeStr + ' ago', 'debug')
+
         client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
 
@@ -182,9 +229,11 @@ def updateEssentialMqtt(temperature, humidity, detected):
 ###############
 log2stdout('Starting dht22mqtt...', 'info')
 log2stdout('Parameters: ', 'info')
-log2stdout('  mqtt_idx = ' + mqtt_idx, 'info')
-log2stdout('  mqtt_brokeraddr = ' + mqtt_brokeraddr, 'info')
-log2stdout('  mqtt_topic = ' + mqtt_topic, 'info')
+log2stdout('  idx = ' + mqtt_idx, 'info')
+log2stdout('  brokeraddr = ' + mqtt_brokeraddr, 'info')
+log2stdout('  topic = ' + mqtt_topic, 'info')
+log2stdout('  updateDelay = ' + str(mqtt_updateDelay), 'info')
+log2stdout('  updateOnEveryChange = ' + str(mqtt_updateOnEveryChange), 'info')
 
 if dht22mqtt_device_type == 'dht22' or dht22mqtt_device_type == 'am2302':
     dhtDevice = adafruit_dht.DHT22(gpiomapping[dht22mqtt_pin], use_pulseio=False)
@@ -239,6 +288,10 @@ while True:
         dht22_hum_stack = hum_data[0]
         dht22_hum_stack_errors = hum_data[1]
         humidity_outlier = hum_data[2]
+
+        log2stdout('Last temperature: ' + str(lastTemperature), 'debug')
+        log2stdout('Last humidity: ' + str(lastHumidity), 'debug')
+
         # Since the intuition here is that errors in humidity and temperature readings
         # are heavily correlated, we can skip mqtt if we detect either.
         detected = ''
@@ -252,6 +305,8 @@ while True:
             updateEssentialMqtt(temperature, humidity, detected)
         else:
             updateEssentialMqtt(temperature, humidity, 'bypass')
+
+        mqtt_lastUpdateTime += dht22mqtt_refresh
 
         data = {
             'timestamp': dht22_ts,
