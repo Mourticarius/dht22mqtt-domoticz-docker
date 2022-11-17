@@ -266,10 +266,10 @@ while True:
         temperature = getTemperature(dhtDevice.temperature)
         humidity = getHumidity(dhtDevice.humidity)
 
-        log2stdout('Last temperature ' + lastTemperature, 'info')
-        log2stdout('Last humidity ' + lastHumidity, 'info')
-        log2stdout('Current temperature ' + temperature, 'info')
-        log2stdout('Current humidity ' + humidity, 'info')
+        log2stdout('Last temperature ' + str(lastTemperature), 'info')
+        log2stdout('Last humidity ' + str(lastHumidity), 'info')
+        log2stdout('Current temperature ' + str(temperature), 'info')
+        log2stdout('Current humidity ' + str(humidity), 'info')
 
         temp_data = processSensorValue(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
         dht22_temp_stack = temp_data[0]
