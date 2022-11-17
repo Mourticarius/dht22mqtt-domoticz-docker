@@ -177,7 +177,7 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 # MQTT update functions
 ###############
-def updateEssentialMqtt(temperature, humidity, detected, changeInValues):
+def updateEssentialMqtt(temperature, humidity, detected):
     global lastTemperature
     global lastHumidity
     global mqtt_lastUpdateTime
@@ -218,9 +218,11 @@ def updateEssentialMqtt(temperature, humidity, detected, changeInValues):
 ###############
 log2stdout('Starting dht22mqtt...', 'info')
 log2stdout('Parameters: ', 'info')
-log2stdout('  mqtt_idx = ' + mqtt_idx, 'info')
-log2stdout('  mqtt_brokeraddr = ' + mqtt_brokeraddr, 'info')
-log2stdout('  mqtt_topic = ' + mqtt_topic, 'info')
+log2stdout('  idx = ' + mqtt_idx, 'info')
+log2stdout('  brokeraddr = ' + mqtt_brokeraddr, 'info')
+log2stdout('  topic = ' + mqtt_topic, 'info')
+log2stdout('  updateDelay = ' + mqtt_updateDelay, 'info')
+log2stdout('  updateOnEveryChange = ' + mqtt_updateOnEveryChange, 'info')
 
 if dht22mqtt_device_type == 'dht22' or dht22mqtt_device_type == 'am2302':
     dhtDevice = adafruit_dht.DHT22(gpiomapping[dht22mqtt_pin], use_pulseio=False)
