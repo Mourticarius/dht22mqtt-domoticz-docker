@@ -222,7 +222,7 @@ log2stdout('  idx = ' + mqtt_idx, 'info')
 log2stdout('  brokeraddr = ' + mqtt_brokeraddr, 'info')
 log2stdout('  topic = ' + mqtt_topic, 'info')
 log2stdout('  updateDelay = ' + str(mqtt_updateDelay), 'info')
-log2stdout('  updateOnEveryChange = ' + mqtt_updateOnEveryChange, 'info')
+log2stdout('  updateOnEveryChange = ' + str(mqtt_updateOnEveryChange), 'info')
 
 if dht22mqtt_device_type == 'dht22' or dht22mqtt_device_type == 'am2302':
     dhtDevice = adafruit_dht.DHT22(gpiomapping[dht22mqtt_pin], use_pulseio=False)
