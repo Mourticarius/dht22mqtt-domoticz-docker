@@ -277,7 +277,7 @@ while True:
     try:
         dht22_ts = datetime.now().timestamp()
         temperature = getTemperature(dhtDevice.temperature)
-        humidity = getHumidity(dhtDevice.humidity)
+        humidity = round(getHumidity(dhtDevice.humidity))
 
         temp_data = processSensorValue(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
         dht22_temp_stack = temp_data[0]
