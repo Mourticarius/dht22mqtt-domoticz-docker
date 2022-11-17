@@ -37,6 +37,9 @@ The container offers the following configurable environment variables:</br>
 | `broker` | | MQTT broker ip address | `192.168.1.10` |
 | `username` | | MQTT username | `None` |
 | `password` | | MQTT password | `None` |
+| `updateDelay` | | Min delay in seconds between publish to topic (might be more in case of outlier) | `900` |
+| `updateOnEveryChange` | `True\|False` | Publish to topic only if there is a change in temperature or humidity | `False` |
+| `logLevel` | `debug\|info\|warn\|error` | Log level in stdout | `info` |
 | `pin` | | GPIO data pin your sensor is hooked up to | `4` |
 | `poll` | | Sampling rate in seconds. Recommended is the range between 2 to 30 seconds. Further information: [_DHT11/DHT22/AM2302 spec sheet_](https://lastminuteengineers.com/dht11-dht22-arduino-tutorial/) | `2` |
 | `device_type` | `dht11` or `dht22` | Sensor type. `dht22` also also works for AM2302 | `dht22` |
