@@ -177,10 +177,10 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 # MQTT update functions
 ###############
-def updateEssentialMqtt(temperature, humidity, detected, changeInValues):
+def updateEssentialMqtt(temperature, humidity, detected, changeInValues, isFirstTime):
     if 'essential' in dht22mqtt_mqtt_chatter:
         if detected == 'accurate' or detected == 'bypass':
-            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or mqtt_lastUpdateTime >= mqtt_maxUpdateTime:
+            if changeInValues or isFirstTime or mqtt_lastUpdateTime >= mqtt_maxUpdateTime:
                 payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
                     humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
 
@@ -258,6 +258,11 @@ while True:
         temperature = getTemperature(dhtDevice.temperature)
         humidity = getHumidity(dhtDevice.humidity)
 
+        log2stdout('Last temperature ' + lastTemperature, 'info')
+        log2stdout('Last humidity ' + lastHumidity, 'info')
+        log2stdout('Current temperature ' + temperature, 'info')
+        log2stdout('Current humidity ' + humidity, 'info')
+
         temp_data = processSensorValue(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
         dht22_temp_stack = temp_data[0]
         dht22_temp_stack_errors = temp_data[1]
@@ -277,12 +282,13 @@ while True:
 
         # Send to MQTT only if there are differences or if it's been more than `mqtt_maxUpdateTime` min since last update
         changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
+        isFirstTime = lastTemperature == 0 and lastHumidity == 0
 
         # Check if filtering enabled
         if 'enabled' in dht22mqtt_filtering_enabled:
-            updateEssentialMqtt(temperature, humidity, detected, changeInValues)
+            updateEssentialMqtt(temperature, humidity, detected, changeInValues, isFirstTime)
         else:
-            updateEssentialMqtt(temperature, humidity, 'bypass', changeInValues)
+            updateEssentialMqtt(temperature, humidity, 'bypass', changeInValues, isFirstTime)
 
         mqtt_lastUpdateTime += dht22mqtt_refresh
 
