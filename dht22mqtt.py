@@ -40,7 +40,7 @@ mqtt_username = os.getenv('username', None)
 mqtt_password = os.getenv('password', None)
 
 mqtt_lastUpdateTime = 0
-mqtt_maxUpdateTime = int(os.getenv('maxUpdateTime', '900'))  # 15 minutes
+mqtt_updateDelay = int(os.getenv('updateDelay', '900'))  # 15 minutes
 mqtt_updateOnEveryChange = os.getenv('updateOnEveryChange', 'False').lower() in ["true"]
 
 ###############
@@ -181,14 +181,14 @@ def updateEssentialMqtt(temperature, humidity, detected, changeInValues):
     global lastTemperature
     global lastHumidity
     global mqtt_lastUpdateTime
-    global mqtt_maxUpdateTime
+    global mqtt_updateDelay
     global mqtt_updateOnEveryChange
 
     if 'essential' in dht22mqtt_mqtt_chatter:
         if detected == 'accurate' or detected == 'bypass':
-            # Send to MQTT only if there are differences or if it's been more than `mqtt_maxUpdateTime` min since last update
+            # Send to MQTT only if there are differences or if it's been more than `mqtt_updateDelay` min since last update
             changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
-            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or mqtt_lastUpdateTime >= mqtt_maxUpdateTime:
+            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or mqtt_lastUpdateTime >= mqtt_updateDelay:
                 payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
                     humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
 
