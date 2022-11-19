@@ -48,7 +48,7 @@ mqtt_brokeraddr = os.getenv('broker', '192.168.1.10')
 mqtt_username = os.getenv('username', None)
 mqtt_password = os.getenv('password', None)
 
-mqtt_lastUpdateTime = 0
+mqtt_lastUptTimestpSec = datetime.now().timestamp()
 mqtt_updateDelay = int(os.getenv('updateDelay', '900'))  # 15 minutes
 mqtt_updateOnEveryChange = os.getenv('updateOnEveryChange', 'False').lower() in ["true"]
 
@@ -191,7 +191,7 @@ def processSensorValue(stack, error, value, value_type):
 def updateEssentialMqtt(temperature, humidity, detected):
     global lastTemperature
     global lastHumidity
-    global mqtt_lastUpdateTime
+    global mqtt_lastUptTimestpSec
     global mqtt_updateDelay
     global mqtt_updateOnEveryChange
 
@@ -199,23 +199,24 @@ def updateEssentialMqtt(temperature, humidity, detected):
         if detected == 'accurate' or detected == 'bypass':
             # Send to MQTT only if there are differences or if it's been more than `mqtt_updateDelay` min since last update
             changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
-            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or mqtt_lastUpdateTime >= mqtt_updateDelay:
+            nowInSeconds = datetime.now().timestamp()
+            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or (nowInSeconds - mqtt_lastUptTimestpSec) >= mqtt_updateDelay:
                 payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
                     humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
 
-                log2stdout('>>> Publishing payload: ', 'info')
+                log2stdout(' ### Publishing payload', 'info')
                 log2stdout('    ' + payload, 'debug')
 
-                mqtt_lastUpdateTime = 0
+                mqtt_lastUptTimestpSec = nowInSeconds
                 lastTemperature = temperature
                 lastHumidity = humidity
                 client.publish(mqtt_topic, payload, qos=1, retain=True)
             else:
                 log2stdout('Ignoring MQTT update:', 'debug')
-                mqtt_lastUpdateTimeInMin = round(mqtt_lastUpdateTime / 60, 1)
+                mqtt_lastUpdateTimeInMin = round(mqtt_lastUptTimestpSec / 60, 1)
                 mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTimeInMin) + " minutes"
                 if mqtt_lastUpdateTimeInMin < 1:
-                    mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTime) + " seconds"
+                    mqtt_lastUpdateTimeStr = str(mqtt_lastUptTimestpSec) + " seconds"
 
                 log2stdout('    -> Change in temperature and humidity: ' + str(changeInValues), 'debug')
                 log2stdout('    -> Last update was ' + mqtt_lastUpdateTimeStr + ' ago', 'debug')
@@ -305,8 +306,6 @@ while True:
             updateEssentialMqtt(temperature, humidity, detected)
         else:
             updateEssentialMqtt(temperature, humidity, 'bypass')
-
-        mqtt_lastUpdateTime += dht22mqtt_refresh
 
         data = {
             'timestamp': dht22_ts,
