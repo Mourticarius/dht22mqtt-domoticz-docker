@@ -213,13 +213,9 @@ def updateEssentialMqtt(temperature, humidity, detected):
                 client.publish(mqtt_topic, payload, qos=1, retain=True)
             else:
                 log2stdout('Ignoring MQTT update:', 'debug')
-                mqtt_lastUpdateTimeInMin = round(mqtt_lastUptTimestpSec / 60, 1)
-                mqtt_lastUpdateTimeStr = str(mqtt_lastUpdateTimeInMin) + " minutes"
-                if mqtt_lastUpdateTimeInMin < 1:
-                    mqtt_lastUpdateTimeStr = str(mqtt_lastUptTimestpSec) + " seconds"
-
+                mqtt_lastUpdateTimeStr = datetime.fromtimestamp(mqtt_lastUptTimestpSec).strftime('%Y-%m-%dT%H:%M:%SZ')
                 log2stdout('    -> Change in temperature and humidity: ' + str(changeInValues), 'debug')
-                log2stdout('    -> Last update was ' + mqtt_lastUpdateTimeStr + ' ago', 'debug')
+                log2stdout('    -> Last update was at: ' + mqtt_lastUpdateTimeStr, 'debug')
 
         client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
