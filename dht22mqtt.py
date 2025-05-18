@@ -118,21 +118,21 @@ def log2stdout(msg, type):
 ###############
 # Polling functions
 ###############
-def getTemperatureJitter(temperature):
-    return getTemperature(temperature - 0.3), getTemperature(temperature + 0.3)
+def get_temperature_jitter(temperature):
+    return get_temperature(temperature - 0.3), get_temperature(temperature + 0.3)
 
 
-def getTemperature(temperature):
+def get_temperature(temperature):
     if dht22mqtt_temp_unit == 'F':
         temperature = temperature * (9 / 5) + 32
     return temperature
 
 
-def getHumidity(humidity):
+def get_humidity(humidity):
     return humidity
 
 
-def getHumidityStatus(humidity):
+def get_humidity_status(humidity):
     if isinstance(humidity, int):
         if humidity < 30:
             return 2
@@ -148,7 +148,7 @@ def getHumidityStatus(humidity):
 ###############
 # Processing function
 ###############
-def processSensorValue(stack, error, value, value_type):
+def process_sensor_value(stack, error, value, value_type):
     # flush stack on accumulation of errors
     if error >= dht22_error_count_stack_flush:
         stack = []
@@ -160,7 +160,7 @@ def processSensorValue(stack, error, value, value_type):
             stack.append(value)
         # use jitter for bootstrap temperature stack
         if value_type == 'temperature':
-            low, high = getTemperatureJitter(value)
+            low, high = get_temperature_jitter(value)
             stack.append(low)
             stack.append(high)
         return stack, error, None
@@ -188,34 +188,34 @@ def processSensorValue(stack, error, value, value_type):
 ###############
 # MQTT update functions
 ###############
-def updateEssentialMqtt(temperature, humidity, detected):
+def update_essential_mqtt(temperature, humidity, detected):
     global lastTemperature
     global lastHumidity
     global mqtt_lastUptTimestpSec
-    global mqtt_updateDelay
-    global mqtt_updateOnEveryChange
+#    global mqtt_updateDelay
+#    global mqtt_updateOnEveryChange
 
     if 'essential' in dht22mqtt_mqtt_chatter:
         if detected == 'accurate' or detected == 'bypass':
             # Send to MQTT only if there are differences or if it's been more than `mqtt_updateDelay` min since last update
-            changeInValues = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
-            nowInSeconds = datetime.now().timestamp()
-            if changeInValues or (lastTemperature == 0 and lastHumidity == 0) or (nowInSeconds - mqtt_lastUptTimestpSec) >= mqtt_updateDelay:
+            change_in_values = mqtt_updateOnEveryChange and temperature != lastTemperature and humidity != lastHumidity
+            now_in_seconds = datetime.now().timestamp()
+            if change_in_values or (lastTemperature == 0 and lastHumidity == 0) or (now_in_seconds - mqtt_lastUptTimestpSec) >= mqtt_updateDelay:
                 payload = '{ "command": "udevice", "idx" : ' + str(mqtt_idx) + ', "nvalue" : 0, "svalue" : "' + str(temperature) + ';' + str(
-                    humidity) + ';' + str(getHumidityStatus(humidity)) + '", "parse": false }'
+                    humidity) + ';' + str(get_humidity_status(humidity)) + '", "parse": false }'
 
                 log2stdout(' ### Publishing payload', 'info')
                 log2stdout('    ' + payload, 'debug')
 
-                mqtt_lastUptTimestpSec = nowInSeconds
+                mqtt_lastUptTimestpSec = now_in_seconds
                 lastTemperature = temperature
                 lastHumidity = humidity
                 client.publish(mqtt_topic, payload, qos=1, retain=True)
             else:
                 log2stdout('Ignoring MQTT update:', 'debug')
-                mqtt_lastUpdateTimeStr = datetime.fromtimestamp(mqtt_lastUptTimestpSec).strftime('%Y-%m-%dT%H:%M:%SZ')
-                log2stdout('    -> Change in temperature and humidity: ' + str(changeInValues), 'debug')
-                log2stdout('    -> Last update was at: ' + mqtt_lastUpdateTimeStr, 'debug')
+                mqtt_last_update_time_str = datetime.fromtimestamp(mqtt_lastUptTimestpSec).strftime('%Y-%m-%dT%H:%M:%SZ')
+                log2stdout('    -> Change in temperature and humidity: ' + str(change_in_values), 'debug')
+                log2stdout('    -> Last update was at: ' + mqtt_last_update_time_str, 'debug')
 
         client.publish(mqtt_topic + "detected", str(detected), qos=1, retain=True)
         client.publish(mqtt_topic + "updated", str(datetime.now()), qos=1, retain=True)
@@ -273,15 +273,15 @@ log2stdout('Begin capture...', 'info')
 while True:
     try:
         dht22_ts = datetime.now().timestamp()
-        temperature = getTemperature(dhtDevice.temperature)
-        humidity = getHumidity(dhtDevice.humidity)
+        temperature = get_temperature(dhtDevice.temperature)
+        humidity = get_humidity(dhtDevice.humidity)
 
-        temp_data = processSensorValue(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
+        temp_data = process_sensor_value(dht22_temp_stack, dht22_temp_stack_errors, temperature, 'temperature')
         dht22_temp_stack = temp_data[0]
         dht22_temp_stack_errors = temp_data[1]
         temperature_outlier = temp_data[2]
 
-        hum_data = processSensorValue(dht22_hum_stack, dht22_hum_stack_errors, humidity, 'humidity')
+        hum_data = process_sensor_value(dht22_hum_stack, dht22_hum_stack_errors, humidity, 'humidity')
         dht22_hum_stack = hum_data[0]
         dht22_hum_stack_errors = hum_data[1]
         humidity_outlier = hum_data[2]
@@ -299,9 +299,9 @@ while True:
 
         # Check if filtering enabled
         if 'enabled' in dht22mqtt_filtering_enabled:
-            updateEssentialMqtt(temperature, humidity, detected)
+            update_essential_mqtt(temperature, humidity, detected)
         else:
-            updateEssentialMqtt(temperature, humidity, 'bypass')
+            update_essential_mqtt(temperature, humidity, 'bypass')
 
         data = {
             'timestamp': dht22_ts,
@@ -318,7 +318,7 @@ while True:
     except RuntimeError as error:
         # DHT22 throws errors often. Keep reading.
         detected = 'error'
-        updateEssentialMqtt(None, None, detected)
+        update_essential_mqtt(None, None, detected)
 
         data = {'timestamp': dht22_ts, 'error_type': error.args[0]}
         log2stdout(data, 'warning')
