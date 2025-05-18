@@ -192,8 +192,6 @@ def update_essential_mqtt(temperature, humidity, detected):
     global lastTemperature
     global lastHumidity
     global mqtt_lastUptTimestpSec
-#    global mqtt_updateDelay
-#    global mqtt_updateOnEveryChange
 
     if 'essential' in dht22mqtt_mqtt_chatter:
         if detected == 'accurate' or detected == 'bypass':
