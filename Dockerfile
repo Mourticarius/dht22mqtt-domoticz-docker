@@ -3,10 +3,10 @@ FROM python:3.9.5-alpine3.12
 COPY requirements.txt dht22mqtt.py gpiomapping.py ./
 
 RUN python -m pip install --upgrade pip && \
-    apk add gcc musl-dev && \
+    apk add gcc musl-dev linux-headers && \
     pip3 install -r requirements.txt --no-cache-dir && \
     pip3 cache purge && \
-    apk del gcc musl-dev && \
+    apk del gcc musl-dev linux-headers && \
     rm -rf /var/lib/apk/lists/* && \
     mkdir log && chmod 777 log/
 
