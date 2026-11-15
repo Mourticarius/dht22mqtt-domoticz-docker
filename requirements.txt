@@ -1,5 +1,5 @@
 adafruit-circuitpython-dht==4.0.12
-gpiod>=2.2.2,<3
+Adafruit-Blinka==8.57.0
 paho-mqtt==2.2.0
 # pre-release to support raspberry pi 4
 # https://sourceforge.net/p/raspberry-gpio-python/tickets/190/
